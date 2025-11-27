@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Log;
 class GeminiService
 {
     protected $apiKey;
-    protected $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    // USAMOS EL MODELO QUE SÍ TIENES EN TU LISTA:
+    protected $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
     public function __construct()
     {
@@ -17,22 +18,33 @@ class GeminiService
 
     public function classifyTicket(string $description): string
     {
-        if (!$this->apiKey) return 'General';
+        if (!$this->apiKey) {
+            return 'General';
+        }
 
-        // Prompt simple para clasificar
-        $prompt = "Clasifica este problema en UNA palabra (DNS, Servidores, Correo, Hosting, Otros): \n\nProblema: \"$description\"";
+        $prompt = "Actúa como un sistema clasificador de IT. Tu única tarea es leer el problema y responder con UNA sola palabra de esta lista: DNS, Servidores, Correo, Hosting, Otros. \n\nProblema: \"$description\" \n\nCategoría:";
 
         try {
-            $response = Http::post($this->baseUrl . '?key=' . $this->apiKey, [
-                'contents' => [['parts' => [['text' => $prompt]]]]
+            // withoutVerifying() es el parche para que funcione en tu Windows local
+            $response = Http::withoutVerifying()->post($this->baseUrl . '?key=' . $this->apiKey, [
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]]
+                ]
             ]);
 
             $json = $response->json();
+
+            // Si hay error, lo logueamos pero no rompemos la app
+            if (isset($json['error'])) {
+                Log::error("Gemini API Error: " . $json['error']['message']);
+                return 'Otros';
+            }
+
             $category = $json['candidates'][0]['content']['parts'][0]['text'] ?? 'Otros';
 
-            return trim(str_replace(["\n", "."], "", $category));
+            return trim(str_replace(["\n", ".", "*"], "", $category));
         } catch (\Exception $e) {
-            Log::error("Gemini Error: " . $e->getMessage());
+            Log::error("Gemini Connection Error: " . $e->getMessage());
             return 'Otros';
         }
     }
