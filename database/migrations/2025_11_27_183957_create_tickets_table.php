@@ -27,6 +27,8 @@ public function up(): void
         $table->decimal('amount', 10, 2)->nullable();
         $table->boolean('is_paid')->default(false);
 
+        $table->timestamp('assigned_at')->nullable();
+        $table->timestamp('closed_at')->nullable();
         $table->timestamps();
     });
 }

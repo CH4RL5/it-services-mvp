@@ -21,8 +21,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
         'role',
-        'is_online'
+        'is_online',
+        'expertise'
     ];
 
     // Relación 1: Un usuario (cliente) tiene MUCHOS tickets creados

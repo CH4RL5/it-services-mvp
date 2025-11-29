@@ -20,13 +20,33 @@ class DatabaseSeeder extends Seeder
             'is_online' => true,
         ]);
 
-        // 2. Crear un Experto (El que recibirá los tickets)
+        // Experto 1: El genio de los Servidores
         User::create([
-            'name' => 'Experto IT',
-            'email' => 'experto@mimic.com',
+            'name' => 'Experto Linux',
+            'email' => 'linux@mimic.com',
             'password' => Hash::make('password'),
             'role' => 'expert',
-            'phone' => '1234567890',
+            'expertise' => 'Servidores', // <--- OJO AQUÍ
+            'is_online' => true,
+        ]);
+
+        // Experto 2: El mago de los Dominios
+        User::create([
+            'name' => 'Experto Dominios',
+            'email' => 'dns@mimic.com',
+            'password' => Hash::make('password'),
+            'role' => 'expert',
+            'expertise' => 'DNS', // <--- OJO AQUÍ
+            'is_online' => true,
+        ]);
+
+        // Experto 3: El Todoterreno (Opcional, 'General' o null para ver todo)
+        User::create([
+            'name' => 'Experto Hosting',
+            'email' => 'host@mimic.com',
+            'password' => Hash::make('password'),
+            'role' => 'expert',
+            'expertise' => 'Hosting',
             'is_online' => true,
         ]);
 
