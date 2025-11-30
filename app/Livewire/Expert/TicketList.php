@@ -6,7 +6,7 @@ use Livewire\Component;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
 use App\Notifications\TicketAssignedNotification;
-
+use App\Services\WhatsAppService;
 class TicketList extends Component
 {
     // Variables para el Modal
@@ -27,7 +27,7 @@ class TicketList extends Component
     }
 
     // 3. Acción: Aceptar (Lo toma y notifica)
-    public function takeTicket()
+    public function takeTicket(WhatsAppService $whatsapp)
     {
         if (!$this->selectedTicket) return;
 
@@ -46,7 +46,15 @@ class TicketList extends Component
 
         // Notificar al cliente
         $this->selectedTicket->user->notify(new TicketAssignedNotification($this->selectedTicket));
+        if ($this->selectedTicket->user->phone) {
+            $link = route('ticket.chat', $this->selectedTicket->uuid);
 
+            $mensaje = "👨‍💻 *¡Experto Asignado!* \n\n" .
+                "Tu ticket de *{$this->selectedTicket->category}* ha sido tomado por un experto. \n\n" .
+                "Entra al chat ahora para resolverlo: \n{$link}";
+
+            $whatsapp->send($this->selectedTicket->user->phone, $mensaje);
+        }
         return redirect()->route('ticket.chat', $this->selectedTicket->uuid);
     }
 
@@ -68,7 +76,15 @@ class TicketList extends Component
         return view('livewire.expert.ticket-list', [
             'availableTickets' => $query->latest()->get(),
 
-            'myTickets' => Ticket::where('expert_id', Auth::id())
+            // 1. Tickets Activos (Todo lo que NO esté cerrado)
+            'activeTickets' => Ticket::where('expert_id', Auth::id())
+                ->where('status', '!=', 'closed')
+                ->latest()
+                ->get(),
+
+            // 2. Tickets Finalizados (Solo los cerrados)
+            'closedTickets' => Ticket::where('expert_id', Auth::id())
+                ->where('status', 'closed')
                 ->latest()
                 ->get()
         ]);

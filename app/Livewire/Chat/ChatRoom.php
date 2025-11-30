@@ -10,12 +10,15 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\StripeService;
 use App\Models\User;
 use App\Notifications\NewWorkOpportunity;
+use Livewire\WithFileUploads;
 class ChatRoom extends Component
 {
+    use WithFileUploads;
     public Ticket $ticket;
     public $newMessage = '';
-
-    // NOTA: Eliminamos 'public $messages' para evitar el error de array_merge
+    public $rating = 5; // Default 5 estrellas
+    public $review = '';
+    public $image;
 
     public function mount(Ticket $ticket)
     {
@@ -48,24 +51,42 @@ class ChatRoom extends Component
 
     public function sendMessage()
     {
-        $this->validate(['newMessage' => 'required']);
+        // 1. VALIDACIÓN CORRECTA: Texto O Imagen (uno de los dos, o ambos)
+        // Quitamos la línea de validate individual que tenías antes
+        $this->validate([
+            'newMessage' => 'required_without:image',
+            'image' => 'nullable|image|max:10240', // Subimos límite a 10MB
+        ]);
 
+        // 2. GUARDAR IMAGEN EN DISCO
+        $imagePath = null;
+        if ($this->image) {
+            // Guardamos en 'storage/app/public/chat-images'
+            $imagePath = $this->image->store('chat-images', 'public');
+        }
+
+        // 3. CREAR MENSAJE EN BASE DE DATOS
         $message = Message::create([
             'ticket_id' => $this->ticket->id,
             'user_id' => Auth::id(),
-            'body' => $this->newMessage,
+            // Si no hay texto, ponemos un placeholder
+            'body' => $this->newMessage ?? '📷 Imagen adjunta',
+            // ¡ESTA LÍNEA FALTABA! Sin esto, la imagen no se guarda en la BD
+            'attachment' => $imagePath,
         ]);
 
-        // --- CAMBIO: Envolvemos en try-catch para ignorar errores de conexión ---
+        // 4. BROADCAST (WebSockets)
         try {
             broadcast(new MessageSent($message));
         } catch (\Exception $e) {
-            // Si Reverb falla, no hacemos nada. El chat sigue funcionando por Polling.
+            // Si falla Reverb, no pasa nada, seguimos con Polling
         }
-        // ------------------------------------------------------------------------
 
-        $this->newMessage = '';
-        // Esto refresca TU pantalla inmediatamente
+        // 5. LIMPIEZA
+        // Reseteamos tanto el texto COMO la imagen temporal
+        $this->reset(['newMessage', 'image']);
+
+        // Avisamos al front para hacer scroll
         $this->dispatch('message-sent');
     }
     // Configuración de WebSockets
@@ -120,5 +141,18 @@ class ChatRoom extends Component
         ]);
 
         $this->dispatch('message-sent'); // Refrescar chat
+    }
+    public function rateService()
+    {
+        // Solo el dueño puede calificar
+        if (Auth::id() !== $this->ticket->user_id) return;
+
+        $this->ticket->update([
+            'rating' => $this->rating,
+            'review' => $this->review
+        ]);
+
+        // Mensaje de agradecimiento
+        session()->flash('success', '¡Gracias por tu opinión!');
     }
 }

@@ -7,32 +7,34 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
-    protected $token;
-    protected $phoneId;
-    protected $baseUrl = 'https://graph.facebook.com/v18.0/';
-
-    public function __construct()
+    public function send($to, $text)
     {
-        $this->token = env('META_WHATSAPP_TOKEN');
-        $this->phoneId = env('META_PHONE_ID');
-    }
+        // 1. Limpieza del número (El parche mexicano)
+        // Si tiene 13 dígitos y empieza con 521, lo convertimos a 52
+        if (strlen($to) == 13 && str_starts_with($to, '521')) {
+            $to = '52' . substr($to, 3);
+        }
 
-    public function sendMessage($to, $message)
-    {
-        $url = $this->baseUrl . $this->phoneId . '/messages';
+        // 2. Configuración
+        $token = env('META_WHATSAPP_TOKEN');
+        $phoneId = env('META_PHONE_ID');
+        $url = "https://graph.facebook.com/v18.0/{$phoneId}/messages";
 
-        try {
-            $response = Http::withToken($this->token)->post($url, [
-                'messaging_product' => 'whatsapp',
-                'to' => $to,
-                'type' => 'text',
-                'text' => ['body' => $message]
-            ]);
+        // 3. Envío
+        $response = Http::withToken($token)->post($url, [
+            'messaging_product' => 'whatsapp',
+            'to' => $to,
+            'type' => 'text',
+            'text' => ['body' => $text]
+        ]);
 
-            return $response->json();
-        } catch (\Exception $e) {
-            Log::error("WhatsApp Send Error: " . $e->getMessage());
-            return null;
+        // 4. Logs para depuración
+        if ($response->successful()) {
+            Log::info("✅ WhatsApp enviado a {$to}");
+            return true;
+        } else {
+            Log::error("❌ Error WhatsApp: " . $response->body());
+            return false;
         }
     }
 }

@@ -80,26 +80,81 @@
     @endif
 
     {{-- LISTA DE MIS CASOS (Igual que antes) --}}
-    <div>
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">📂 Mis Casos Activos</h2>
-        <div class="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul class="divide-y divide-gray-200">
-                @foreach($myTickets as $ticket)
-                <li>
-                    <a href="{{ route('ticket.chat', $ticket->uuid) }}" class="block hover:bg-gray-50">
-                        <div class="px-4 py-4 sm:px-6">
-                            <div class="flex items-center justify-between">
-                                <p class="text-sm font-medium text-blue-600 truncate">Ticket #{{ substr($ticket->uuid,
-                                    0, 8) }}</p>
-                                <span class="px-2 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">En
-                                    Curso</span>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+        {{-- COLUMNA 1: CASOS ACTIVOS (Prioridad Alta) --}}
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                🟢 En Curso <span class="text-sm font-normal text-gray-500">({{ $activeTickets->count() }})</span>
+            </h2>
+
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden border border-blue-100">
+                @if($activeTickets->isEmpty())
+                <div class="p-8 text-center text-gray-400">
+                    No tienes casos activos. ¡Toma uno de arriba! 👆
+                </div>
+                @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach($activeTickets as $ticket)
+                    <li class="hover:bg-blue-50 transition">
+                        <a href="{{ route('ticket.chat', $ticket->uuid) }}" class="block px-6 py-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded uppercase">
+                                    {{ $ticket->category }}
+                                </span>
+                                <span class="text-xs text-gray-400 font-mono">#{{ substr($ticket->uuid, 0, 6) }}</span>
                             </div>
-                            <p class="mt-2 text-sm text-gray-500">{{ Str::limit($ticket->title, 60) }}</p>
-                        </div>
-                    </a>
-                </li>
-                @endforeach
-            </ul>
+                            <h4 class="text-lg font-bold text-gray-800 mb-1">{{ Str::limit($ticket->title, 40) }}</h4>
+                            <p class="text-sm text-gray-500 flex items-center gap-1">
+                                👤 {{ $ticket->user->name }}
+                                <span
+                                    class="text-xs text-green-600 font-bold bg-green-50 px-1 rounded ml-2">Pagado</span>
+                            </p>
+                        </a>
+                    </li>
+                    @endforeach
+                </ul>
+                @endif
+            </div>
         </div>
+
+        {{-- COLUMNA 2: HISTORIAL (Finalizados) --}}
+        <div>
+            <h2 class="text-2xl font-bold text-gray-600 mb-4 flex items-center gap-2">
+                🏁 Finalizados <span class="text-sm font-normal text-gray-400">({{ $closedTickets->count() }})</span>
+            </h2>
+
+            <div
+                class="bg-gray-50 shadow rounded-lg overflow-hidden border border-gray-200 opacity-80 hover:opacity-100 transition">
+                @if($closedTickets->isEmpty())
+                <div class="p-8 text-center text-gray-400 text-sm">
+                    Aún no has finalizado ningún ticket.
+                </div>
+                @else
+                <ul class="divide-y divide-gray-200">
+                    @foreach($closedTickets as $ticket)
+                    <li class="hover:bg-white transition">
+                        <a href="{{ route('ticket.chat', $ticket->uuid) }}" class="block px-6 py-4">
+                            <div class="flex justify-between items-center">
+                                <p class="text-sm font-medium text-gray-600 line-through">
+                                    {{ Str::limit($ticket->title, 45) }}
+                                </p>
+                                <span class="text-xs text-gray-400">
+                                    {{ $ticket->updated_at->format('d M') }}
+                                </span>
+                            </div>
+                            <div class="mt-1 flex items-center justify-between">
+                                <span class="text-xs text-gray-400">#{{ substr($ticket->uuid, 0, 6) }}</span>
+                                <span
+                                    class="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">Cerrado</span>
+                            </div>
+                        </a>
+                    </li>
+                    @endforeach
+                </ul>
+                @endif
+            </div>
+        </div>
+
     </div>
 </div>
