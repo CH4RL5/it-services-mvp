@@ -46,6 +46,7 @@ class TicketList extends Component
 
         // Notificar al cliente
         $this->selectedTicket->user->notify(new TicketAssignedNotification($this->selectedTicket));
+        // Verificamos si el usuario tiene teléfono guardado
         if ($this->selectedTicket->user->phone) {
             $link = route('ticket.chat', $this->selectedTicket->uuid);
 

@@ -3,40 +3,43 @@
 namespace App\Livewire\Chat;
 
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use App\Models\Ticket;
 use App\Models\Message;
-use App\Events\MessageSent; // Asegúrate de importar esto
+use App\Models\User;
+use App\Events\MessageSent;
 use Illuminate\Support\Facades\Auth;
 use App\Services\StripeService;
-use App\Models\User;
+use App\Services\WhatsAppService; // Importante
 use App\Notifications\NewWorkOpportunity;
-use Livewire\WithFileUploads;
+
 class ChatRoom extends Component
 {
     use WithFileUploads;
+
     public Ticket $ticket;
     public $newMessage = '';
-    public $rating = 5; // Default 5 estrellas
-    public $review = '';
     public $image;
+
+    // Variables para calificación
+    public $rating = 5;
+    public $review = '';
 
     public function mount(Ticket $ticket)
     {
-        // Seguridad: Permitir si es Dueño, Experto Asignado O Admin
+        // 1. Seguridad: Solo Dueño, Experto o Admin
         if (Auth::id() !== $ticket->user_id && Auth::id() !== $ticket->expert_id && Auth::user()->role !== 'admin') {
-            abort(403); // Acceso denegado
+            abort(403);
         }
 
         $this->ticket = $ticket;
 
+        // 2. Lógica de Retorno de Pago (Stripe Success)
         if (request()->has('payment') && request('payment') == 'success') {
             if (!$this->ticket->is_paid) {
-
-                // 1. Activar Ticket
                 $this->ticket->update(['is_paid' => true, 'status' => 'open']);
 
-                // 2. MATCHMAKING AUTOMÁTICO (Notificar Expertos)
-                // Buscamos expertos cuya especialidad coincida con la categoría del ticket
+                // Notificar a todos los expertos de esa categoría
                 $matchingExperts = User::where('role', 'expert')
                     ->where('expertise', $this->ticket->category)
                     ->get();
@@ -46,84 +49,84 @@ class ChatRoom extends Component
                 }
             }
         }
-
     }
 
-    public function sendMessage()
+    public function sendMessage(WhatsAppService $whatsapp)
     {
-        // 1. VALIDACIÓN CORRECTA: Texto O Imagen (uno de los dos, o ambos)
-        // Quitamos la línea de validate individual que tenías antes
+        // 1. Validaciones
         $this->validate([
             'newMessage' => 'required_without:image',
-            'image' => 'nullable|image|max:10240', // Subimos límite a 10MB
+            'image' => 'nullable|image|max:10240', // 10MB Máx
         ]);
 
-        // 2. GUARDAR IMAGEN EN DISCO
+        // 2. Guardar Imagen (si hay)
         $imagePath = null;
         if ($this->image) {
-            // Guardamos en 'storage/app/public/chat-images'
             $imagePath = $this->image->store('chat-images', 'public');
         }
 
-        // 3. CREAR MENSAJE EN BASE DE DATOS
+        // 3. Guardar en Base de Datos (La verdad absoluta)
         $message = Message::create([
             'ticket_id' => $this->ticket->id,
             'user_id' => Auth::id(),
-            // Si no hay texto, ponemos un placeholder
             'body' => $this->newMessage ?? '📷 Imagen adjunta',
-            // ¡ESTA LÍNEA FALTABA! Sin esto, la imagen no se guarda en la BD
             'attachment' => $imagePath,
         ]);
 
-        // 4. BROADCAST (WebSockets)
+        // 4. Actualizar Web en Tiempo Real (Reverb)
         try {
             broadcast(new MessageSent($message));
         } catch (\Exception $e) {
-            // Si falla Reverb, no pasa nada, seguimos con Polling
+            // Si falla Reverb, no pasa nada, el Polling lo resuelve
         }
 
-        // 5. LIMPIEZA
-        // Reseteamos tanto el texto COMO la imagen temporal
-        $this->reset(['newMessage', 'image']);
+        // --- 5. PUENTE A WHATSAPP (La Magia Omnicanal) ---
+        // Solo si escribe el EXPERTO o ADMIN
+        if (Auth::user()->role === 'expert' || Auth::user()->role === 'admin') {
 
-        // Avisamos al front para hacer scroll
+            // Y si el cliente tiene número de teléfono registrado
+            if ($this->ticket->user->phone) {
+
+                $textoParaEnviar = $this->newMessage;
+
+                // Si mandó imagen, enviamos el link público (WhatsApp API simple no soporta adjuntos directos fácil)
+                if ($imagePath) {
+                    $linkImagen = asset('storage/' . $imagePath);
+                    $textoParaEnviar = $textoParaEnviar . "\n\n📷 *Ver imagen adjunta:* " . $linkImagen;
+                }
+
+                // Enviamos la copia al celular del cliente
+                if (!empty($textoParaEnviar) || $imagePath) {
+                    $whatsapp->send($this->ticket->user->phone, $textoParaEnviar ?? '📷 Imagen enviada');
+                }
+            }
+        }
+        // ------------------------------------------------
+
+        // 6. Limpieza
+        $this->reset(['newMessage', 'image']);
         $this->dispatch('message-sent');
     }
-    // Configuración de WebSockets
+
+    // Configuración de WebSockets para recibir
     public function getListeners()
     {
-        return [
-            // Cuando llegue un evento 'MessageSent', solo refrescamos la vista
-            "echo:ticket.{$this->ticket->uuid},MessageSent" => '$refresh',
-        ];
-    }
-    // --- AGREGAR ESTO ---
-    public function loadMessages()
-    {
-        // No necesita código adentro.
-        // Al llamarse, Livewire recarga el componente y
-        // el método render() de abajo actualiza los mensajes automáticamente.
+        return ["echo:ticket.{$this->ticket->uuid},MessageSent" => '$refresh'];
     }
 
-    public function render()
-    {
-        return view('livewire.chat.chat-room', [
-            // Pasamos los mensajes directo a la vista aquí.
-            // Esto evita el error de tipos (Collection vs Array).
-            'messages' => $this->ticket->messages()->with('user')->get()
-        ])->layout('layouts.app');
-    }
+    // Método dummy para el Polling (wire:poll)
+    public function loadMessages() {}
+
+    // Generar link de pago nuevo
     public function payNow(StripeService $stripe)
     {
-        // Generamos un nuevo link de pago para este ticket
         $checkoutUrl = $stripe->createCheckoutSession($this->ticket);
-
-        // Redirigimos a Stripe
         return redirect($checkoutUrl);
     }
-    public function closeTicket()
+
+    // Finalizar Ticket
+    public function closeTicket(WhatsAppService $whatsapp)
     {
-        // Solo el experto asignado o el admin pueden cerrar
         if (Auth::id() !== $this->ticket->expert_id && Auth::user()->role !== 'admin') {
             return;
         }
@@ -133,18 +136,24 @@ class ChatRoom extends Component
             'closed_at' => now(),
         ]);
 
-        // Opcional: Mandar un mensaje automático de despedida
+        // Aviso en Chat Web
         Message::create([
             'ticket_id' => $this->ticket->id,
-            'user_id' => null, // Mensaje del sistema
+            'user_id' => null,
             'body' => '🔒 El experto ha marcado este ticket como FINALIZADO.',
         ]);
 
-        $this->dispatch('message-sent'); // Refrescar chat
+        // Aviso por WhatsApp al cliente
+        if ($this->ticket->user->phone) {
+            $whatsapp->send($this->ticket->user->phone, "🏁 *Ticket Finalizado*\nEl experto ha cerrado tu caso. Entra a la web si deseas calificar el servicio.");
+        }
+
+        $this->dispatch('message-sent');
     }
+
+    // Calificar
     public function rateService()
     {
-        // Solo el dueño puede calificar
         if (Auth::id() !== $this->ticket->user_id) return;
 
         $this->ticket->update([
@@ -152,7 +161,13 @@ class ChatRoom extends Component
             'review' => $this->review
         ]);
 
-        // Mensaje de agradecimiento
         session()->flash('success', '¡Gracias por tu opinión!');
+    }
+
+    public function render()
+    {
+        return view('livewire.chat.chat-room', [
+            'messages' => $this->ticket->messages()->with('user')->get()
+        ])->layout('layouts.app');
     }
 }

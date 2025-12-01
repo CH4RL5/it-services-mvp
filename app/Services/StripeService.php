@@ -35,7 +35,7 @@ class StripeService
             ]],
             'mode' => 'payment',
             // Rutas a donde vuelve el usuario
-            'success_url' => route('ticket.chat', $ticket->uuid) . '?payment=success',
+            'success_url' => route('payment.callback', ['ticket' => $ticket->uuid]),
             'cancel_url' => route('dashboard'),
             'metadata' => [
                 'ticket_uuid' => $ticket->uuid, // IMPORTANTE para saber qué ticket se pagó
