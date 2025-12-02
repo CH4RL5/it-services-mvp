@@ -163,6 +163,46 @@ class ChatRoom extends Component
 
         session()->flash('success', '¡Gracias por tu opinión!');
     }
+    public function redactMessage($messageId)
+    {
+        // 1. Buscar el mensaje
+        $msg = Message::find($messageId);
+
+        // 2. Seguridad: Solo Admin o el Experto asignado pueden censurar
+        if (!$msg || (Auth::user()->role !== 'admin' && Auth::id() !== $this->ticket->expert_id)) {
+            return;
+        }
+
+        // 3. "Quemar" el contenido sensible
+        $msg->update([
+            'body' => '🔒 [DATOS SENSIBLES ELIMINADOS POR SEGURIDAD]',
+            'attachment' => null // También borramos adjuntos si los hubiera
+        ]);
+
+        // 4. Actualizar la vista de todos
+        try {
+            // Reutilizamos el evento MessageSent para actualizar la UI
+            // (Aunque técnicamente es un update, esto forzará el refresh)
+            broadcast(new MessageSent($msg));
+        } catch (\Exception $e) {
+        }
+
+        $this->dispatch('message-sent');
+    }
+    public function reportIssue()
+    {
+        // Solo el dueño puede reportar
+        if (Auth::id() !== $this->ticket->user_id) return;
+
+        $this->ticket->update([
+            'is_disputed' => true
+        ]);
+
+        // (Opcional) Aquí podrías enviar un correo al Admin avisando
+        // Mail::to('admin@mimic.com')->send(new AdminAlert($this->ticket));
+
+        session()->flash('error', 'Reporte enviado. Un administrador revisará tu caso personalmente.');
+    }
 
     public function render()
     {

@@ -101,7 +101,13 @@ new class extends Component
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
         </div>
-
+        @if(auth()->user()->role === 'admin')
+        <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+            <x-nav-link :href="route('admin.experts')" :active="request()->routeIs('admin.experts')">
+                {{ __('Expertos') }}
+            </x-nav-link>
+        </div>
+        @endif
         <!-- Responsive Settings Options -->
         <div class="pt-4 pb-1 border-t border-gray-200">
             <div class="px-4">

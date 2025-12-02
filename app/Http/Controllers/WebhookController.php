@@ -11,7 +11,7 @@ use App\Services\GeminiService;
 use App\Services\StripeService;
 use Illuminate\Support\Str;
 use App\Events\MessageSent;
-use Illuminate\Support\Facades\Http; // Importante para la petición HTTP
+use Illuminate\Support\Facades\Http;
 
 class WebhookController extends Controller
 {
@@ -31,11 +31,7 @@ class WebhookController extends Controller
     {
         try {
             $body = $request->all();
-
-            // Validación básica de estructura
-            if (!isset($body['entry'][0]['changes'][0]['value']['messages'][0])) {
-                return response()->json(['status' => 'ignored']);
-            }
+            if (!isset($body['entry'][0]['changes'][0]['value']['messages'][0])) return response()->json(['status' => 'ignored']);
 
             $msgData = $body['entry'][0]['changes'][0]['value']['messages'][0];
             $phone = $msgData['from'];
@@ -43,31 +39,56 @@ class WebhookController extends Controller
 
             if (empty($text)) return response()->json(['status' => 'empty']);
 
-            Log::info("1. Mensaje recibido de: $phone");
+            // 1. BUSCAR USUARIO
+            $user = User::where('phone', $phone)->first();
 
-            // 1. USUARIO
-            $defaultPass = 'password';
-            $user = User::firstOrCreate(
-                ['phone' => $phone],
-                [
-                    'name' => 'Usuario WhatsApp',
+            // --- CASO A: USUARIO NUEVO (REGISTRO AUTOMÁTICO) ---
+            if (!$user) {
+                $password = \Illuminate\Support\Str::random(10); // Generar pass real
+
+                $user = User::create([
+                    'name' => 'Amigo', // Nombre temporal
                     'email' => $phone . '@whatsapp.com',
-                    'password' => bcrypt($defaultPass),
-                    'role' => 'client'
-                ]
-            );
+                    'password' => bcrypt($password),
+                    'phone' => $phone,
+                    'role' => 'client',
+                    'conversation_step' => 'WAITING_NAME' // <--- Paso 1: Pedir Nombre
+                ]);
 
-            // 2. BUSCAR TICKET
-            $ticket = Ticket::where('user_id', $user->id)
+                $this->sendWhatsApp($phone, "👋 ¡Hola! Bienvenido a Mimic IT.\n\nVeo que es tu primera vez aquí. Para poder atenderte mejor, dime: \n\n*¿Cuál es tu nombre?*");
+                return response()->json(['status' => 'asked_name']);
+            }
+
+            // --- CASO B: FLUJO DE CONVERSACIÓN ---
+
+            // 1. Si estamos esperando el NOMBRE (Viene del Caso A)
+            if ($user->conversation_step === 'WAITING_NAME') {
+                $user->update([
+                    'name' => $text,
+                    'conversation_step' => 'WAITING_PROBLEM' // <--- Paso 2: Pedir Problema
+                ]);
+
+                $this->sendWhatsApp($phone, "¡Mucho gusto, {$text}! 🤝\n\nTu cuenta ha sido creada. Ahora cuéntame: \n*¿Qué problema técnico necesitas resolver hoy?*");
+                return response()->json(['status' => 'saved_name']);
+            }
+
+            // 2. Si es USUARIO RECURRENTE (Ya existía y manda "Hola")
+            $activeTicket = Ticket::where('user_id', $user->id)
                 ->whereIn('status', ['open', 'assigned', 'pending_payment'])
-                ->latest()
-                ->first();
+                ->exists();
 
-            // 3. LÓGICA
-            if (!$ticket) {
-                Log::info("2. Creando nuevo ticket para: $phone");
+            // Si NO tiene ticket y NO estamos esperando problema, lo saludamos primero
+            if (!$activeTicket && $user->conversation_step === null) {
+                // Lo ponemos en modo "Esperando Problema" para el siguiente mensaje
+                $user->update(['conversation_step' => 'WAITING_PROBLEM']);
 
-                // --- NUEVO TICKET ---
+                $this->sendWhatsApp($phone, "👋 ¡Hola de nuevo, {$user->name}!\n\n¿En qué podemos ayudarte hoy? Describe tu problema en el siguiente mensaje.");
+                return response()->json(['status' => 'welcome_back']);
+            }
+
+            // 3. CREAR TICKET (Si ya estamos esperando el problema)
+            if (!$activeTicket && $user->conversation_step === 'WAITING_PROBLEM') {
+
                 $category = $ai->classifyTicket($text);
 
                 $ticket = Ticket::create([
@@ -79,38 +100,53 @@ class WebhookController extends Controller
                     'status' => 'pending_payment'
                 ]);
 
-                // --- STRIPE ---
-                $paymentLink = "https://tu-sitio.com/login"; // Fallback por seguridad
+                // Generar Link Pago
                 try {
                     $paymentLink = $stripe->createCheckoutSession($ticket);
-                    Log::info("3. Stripe Link Generado: $paymentLink");
                 } catch (\Exception $e) {
-                    Log::error("❌ Error Stripe: " . $e->getMessage());
-                    // Si falla Stripe, usamos el link al chat directo
                     $paymentLink = route('ticket.chat', $ticket->uuid);
                 }
 
-                // --- MENSAJE ---
-                // Usamos try-catch aquí por si la ruta 'magic.login' no existe
-                $magicLink = "";
-                try {
-                    $magicLink = route('magic.login', ['phone' => $phone]);
-                } catch (\Exception $e) {
-                    $magicLink = route('login'); // Fallback si no existe la ruta mágica
-                }
+                // Generar Link Mágico
+                $magicLink = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+                    'magic.login',
+                    now()->addHour(),
+                    ['user' => $user->id]
+                );
+
+                // MENSAJE FINAL (Diferente si es nuevo o viejo)
+                // Usamos "wasRecentlyCreated" o verificamos la fecha de creación
+                $esNuevo = $user->created_at->diffInMinutes(now()) < 5;
 
                 $mensaje = "🤖 *Ticket Generado* \n" .
                     "📂 Categoría: *{$category}* \n\n" .
-                    "💳 *Pagar aquí:* \n{$paymentLink} \n\n" .
-                    "🚀 *Entrar al Panel:* \n{$magicLink}";
+                    "💳 *PASO 1: Paga aquí:* \n{$paymentLink} \n\n";
 
-                Log::info("4. Enviando mensaje de respuesta...");
+                if ($esNuevo) {
+                    // Si se acaba de registrar, le damos la bienvenida oficial
+                    $mensaje .= "🔐 *PASO 2: Tu Cuenta:* \n" .
+                        "Ya estás registrado con tu número. \n\n";
+                } else {
+                    $mensaje .= "🔐 *PASO 2: Acceso:* \n" .
+                        "Usa tu cuenta habitual. \n\n";
+                }
+
+                $mensaje .= "🚀 *Entra directo sin clave:* \n{$magicLink}";
+
                 $this->sendWhatsApp($phone, $mensaje);
-            } else {
-                Log::info("2. Ticket existente encontrado: #{$ticket->id}");
-                // --- TICKET EXISTENTE ---
+
+                // Resetear paso
+                $user->update(['conversation_step' => null]);
+
+                return response()->json(['status' => 'ticket_created']);
+            }
+
+            // CASO C: TIENE TICKET ACTIVO (Chat Normal)
+            $latestTicket = Ticket::where('user_id', $user->id)->latest()->first();
+
+            if ($latestTicket) {
                 $message = Message::create([
-                    'ticket_id' => $ticket->id,
+                    'ticket_id' => $latestTicket->id,
                     'user_id' => $user->id,
                     'body' => $text,
                     'source' => 'whatsapp'
@@ -119,39 +155,32 @@ class WebhookController extends Controller
                 try {
                     broadcast(new MessageSent($message));
                 } catch (\Exception $e) {
-                    Log::error("Error Websocket: " . $e->getMessage());
                 }
             }
 
             return response()->json(['status' => 'processed']);
         } catch (\Exception $e) {
-            // Este catch atrapa cualquier error fatal y nos dice qué pasó
-            Log::error("🔥 ERROR CRÍTICO EN WEBHOOK: " . $e->getMessage());
-            Log::error($e->getTraceAsString());
+            Log::error("🔥 ERROR: " . $e->getMessage());
             return response()->json(['status' => 'error'], 500);
         }
     }
 
     private function sendWhatsApp($to, $text)
     {
+        // Parche México
         if (str_starts_with($to, '521')) {
             $to = '52' . substr($to, 3);
         }
+
         $token = env('META_WHATSAPP_TOKEN');
         $phoneId = env('META_PHONE_ID');
         $url = "https://graph.facebook.com/v18.0/{$phoneId}/messages";
 
-        $response = Http::withToken($token)->post($url, [
+        \Illuminate\Support\Facades\Http::withToken($token)->post($url, [
             'messaging_product' => 'whatsapp',
             'to' => $to,
             'type' => 'text',
             'text' => ['body' => $text]
         ]);
-
-        if ($response->successful()) {
-            Log::info("✅ WhatsApp enviado correctamente.");
-        } else {
-            Log::error("❌ Error Meta API: " . $response->body());
-        }
     }
 }

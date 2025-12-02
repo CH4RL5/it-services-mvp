@@ -25,8 +25,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'phone',
         'role',
+        'expertise',
         'is_online',
-        'expertise'
+        'conversation_step' // <--- AGREGADO
     ];
 
     // Relación 1: Un usuario (cliente) tiene MUCHOS tickets creados

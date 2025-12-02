@@ -18,6 +18,11 @@
                     </span>
                     <span class="text-xs text-gray-400">{{ $ticket->created_at->diffForHumans() }}</span>
                 </div>
+                {{--NOMBRE DEL CLIENTE --}}
+                <p class="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">
+                    👤 {{ $ticket->user->name }}
+                    @if($ticket->user->phone) <span class="text-green-600">(WhatsApp)</span> @endif
+                </p>
                 <h3 class="font-bold text-lg mb-2">{{ Str::limit($ticket->title, 40) }}</h3>
 
                 <div class="flex justify-between items-center mt-4">
