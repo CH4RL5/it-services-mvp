@@ -124,52 +124,22 @@
                             <span class="text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded text-xs">Pendiente</span>
                             @endif
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td
+                            class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end items-center gap-2">
 
-                            {{-- MODAL DE RESOLUCIÓN --}}
-                            @if($showResolutionModal)
-                            <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog"
-                                aria-modal="true">
-                                <div
-                                    class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-
-                                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-                                        wire:click="$set('showResolutionModal', false)"></div>
-
-                                    <div
-                                        class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">Dictar
-                                                Resolución</h3>
-                                            <p class="text-sm text-gray-500 mb-4">
-                                                Escribe la decisión final sobre esta disputa. Este mensaje será enviado
-                                                al Cliente y al Experto.
-                                            </p>
-
-                                            <textarea wire:model="resolutionText"
-                                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                                rows="4"
-                                                placeholder="Ej: Se ha verificado que el servicio fue entregado. No procede el reembolso."></textarea>
-                                            @error('resolutionText') <span class="text-red-500 text-xs">{{ $message
-                                                }}</span> @enderror
-                                        </div>
-                                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                                            <button type="button" wire:click="saveResolution"
-                                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 sm:ml-3 sm:w-auto sm:text-sm">
-                                                Enviar Resolución
-                                            </button>
-                                            <button type="button" wire:click="$set('showResolutionModal', false)"
-                                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                                                Cancelar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            {{-- LÓGICA DE RESOLUCIÓN --}}
+                            @if($ticket->is_disputed)
+                            {{-- Botón para abrir el Modal (si usaste el método del modal) --}}
+                            <button wire:click="openResolutionModal({{ $ticket->id }})"
+                                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow text-xs font-bold transition flex items-center gap-1"
+                                title="Resolver Disputa">
+                                <span>⚖️</span> Resolver
+                            </button>
                             @endif
-                            {{-- Enlace de siempre --}}
+
+                            {{-- Enlace al Chat --}}
                             <a href="{{ route('ticket.chat', $ticket->uuid) }}"
-                                class="text-indigo-600 hover:text-indigo-900 font-bold">
+                                class="text-indigo-600 hover:text-indigo-900 font-bold border border-indigo-200 px-3 py-1 rounded hover:bg-indigo-50 transition">
                                 Ver Chat →
                             </a>
                         </td>
