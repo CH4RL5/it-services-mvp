@@ -49,14 +49,14 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h3 class="font-bold text-gray-700 mb-4">📈 Tendencia de Ingresos (7 días)</h3>
-            <div class="h-64">
+            <div class="h-64" wire:ignore>
                 <canvas id="incomeChart"></canvas>
             </div>
         </div>
 
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h3 class="font-bold text-gray-700 mb-4">🍰 Distribución de Problemas</h3>
-            <div class="h-64 flex justify-center">
+            <div class="h-64 flex justify-center" wire:ignore>
                 <canvas id="categoryChart"></canvas>
             </div>
         </div>
