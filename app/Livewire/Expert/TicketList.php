@@ -65,8 +65,8 @@ class TicketList extends Component
 
         // Query Base: Tickets pagados y sin asignar
         $query = Ticket::where('is_paid', true)
-            ->whereNull('expert_id');
-
+            ->whereNull('expert_id')
+            ->where('status', '!=', 'closed');
         // MATCHMAKING: Si el experto tiene una especialidad, filtramos por ella.
         // Si su especialidad es null, asume que es un "Super Experto" y ve todo.
         if ($user->expertise) {
