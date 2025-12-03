@@ -94,145 +94,184 @@
             @endif
         </div>
 
-        {{-- FOOTER (LÓGICA BLINDADA) --}}
-        <div class="p-4 bg-white border-t">
+        {{-- PIE DE PÁGINA (FOOTER INTEGRADO) --}}
+        <div class="bg-white border-t">
 
-            {{-- 1. SI ESTÁ CERRADO --}}
-            @if($isClosed)
-            <div
-                class="flex flex-col items-center justify-center p-6 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl">
-                <div class="text-center mb-4">
-                    <span class="text-2xl block mb-2">🔒</span>
-                    <h3 class="text-lg font-bold text-gray-800">Ticket Finalizado</h3>
-                    <p class="text-gray-500 text-sm">El experto ha cerrado este caso.</p>
+            {{-- A. BARRA DE ALERTA DE DISPUTA (Si existe) --}}
+            @if($ticket->is_disputed)
+            <div class="bg-red-50 px-4 py-3 border-b border-red-100 flex items-center justify-between animate-pulse">
+                <div class="flex items-center gap-2 text-red-700 text-sm font-bold">
+                    <span class="text-xl">🚨</span>
+                    <span>Reclamo Abierto: "{{ Str::limit($ticket->dispute_reason, 50) }}"</span>
                 </div>
-
-                {{-- Calificación --}}
-                @if($ticket->rating)
-                <div class="text-yellow-400 text-2xl tracking-widest">{{ str_repeat('★', $ticket->rating) }}</div>
-                @elseif(auth()->id() === $ticket->user_id)
-                <div class="w-full max-w-xs">
-                    <p class="text-center text-sm font-bold text-yellow-700 mb-2">Califica la atención:</p>
-                    <div class="flex justify-center gap-2 mb-3">
-                        @foreach(range(1,5) as $star)
-                        <button wire:click="$set('rating', {{ $star }})"
-                            class="text-3xl {{ $rating >= $star ? 'text-yellow-400' : 'text-gray-300' }} hover:scale-110 transition">★</button>
-                        @endforeach
-                    </div>
-                    <button wire:click="rateService"
-                        class="w-full bg-yellow-500 text-white font-bold py-2 rounded shadow hover:bg-yellow-600">Enviar</button>
-                </div>
+                @if(auth()->user()->role === 'admin')
+                <span class="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">Admin: Resolver en Dashboard</span>
+                @else
+                <span class="text-xs text-red-500">En revisión...</span>
                 @endif
-
-                <a href="{{ route('dashboard') }}" class="mt-6 text-blue-600 hover:underline text-sm font-bold">Volver
-                    al Inicio</a>
-            </div>
-
-            {{-- 2. SI FALTA PAGO (Y SOY CLIENTE) --}}
-            @elseif(!$ticket->is_paid && auth()->id() === $ticket->user_id)
-            <div class="flex flex-col items-center justify-center py-6 bg-red-50 rounded-xl border border-red-100">
-                <h3 class="font-bold text-gray-800">🔒 Chat Bloqueado</h3>
-                <p class="text-gray-500 text-sm mb-4">Paga para activar el servicio.</p>
-                <button wire:click="payNow"
-                    class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full shadow hover:bg-blue-700 transition">
-                    💳 Pagar ${{ $ticket->amount }} MXN
-                </button>
-            </div>
-
-            {{-- 3. SI FALTA PAGO (Y SOY EXPERTO/ADMIN) --}}
-            @elseif(!$ticket->is_paid)
-            <div
-                class="flex items-center justify-center p-6 bg-yellow-50 border-2 border-dashed border-yellow-200 rounded-xl text-center">
-                <div>
-                    <span class="text-2xl block mb-1">⏳</span>
-                    <h3 class="font-bold text-yellow-800">Esperando Pago</h3>
-                    <p class="text-yellow-700 text-xs">El cliente aún no paga.</p>
-                </div>
-            </div>
-
-            {{-- 4. CHAT ACTIVO (Solo si pagado y abierto) --}}
-            @else
-            <div class="flex flex-col w-full">
-                {{-- Preview Imagen --}}
-                @if ($image)
-                <div
-                    class="flex items-center gap-2 p-2 bg-gray-100 rounded-t-lg mx-4 border border-b-0 border-gray-300">
-                    <img src="{{ $image->temporaryUrl() }}" class="h-12 w-12 object-cover rounded">
-                    <button wire:click="$set('image', null)" class="text-red-500 font-bold px-2">×</button>
-                    <span class="text-xs text-gray-500">Imagen lista...</span>
-                </div>
-                @endif
-
-                <form wire:submit.prevent="sendMessage" class="flex items-center gap-2">
-                    {{-- Clip --}}
-                    <div>
-                        <input type="file" wire:model="image" id="file-upload" class="hidden" accept="image/*">
-                        <label for="file-upload"
-                            class="cursor-pointer p-2 text-gray-400 hover:text-blue-600 transition">📎</label>
-                    </div>
-
-                    <input type="text" wire:model="newMessage"
-                        class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="Escribe un mensaje...">
-
-                    <button type="submit"
-                        class="bg-blue-600 text-white rounded-full p-2.5 shadow hover:bg-blue-700 transition">
-                        <svg class="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                        </svg>
-                    </button>
-                </form>
             </div>
             @endif
-        </div>
-    </div>
 
-    <script>
-        window.addEventListener('message-sent', event => {
+            <div class="p-4">
+                {{-- B. LÓGICA DE ESTADO --}}
+
+                {{-- 1. CASO TICKET CERRADO (Bloqueo Total) --}}
+                @if($isClosed)
+                <div
+                    class="flex flex-col items-center justify-center p-6 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl">
+                    <div class="text-center mb-4">
+                        <span class="text-2xl block mb-2">🔒</span>
+                        <h3 class="text-lg font-bold text-gray-800">Ticket Finalizado</h3>
+                        <p class="text-gray-500 text-sm">El caso ha sido cerrado.</p>
+                    </div>
+
+                    @if($ticket->rating)
+                    <div class="text-yellow-400 text-2xl tracking-widest">{{ str_repeat('★', $ticket->rating) }}</div>
+                    @elseif(auth()->id() === $ticket->user_id)
+                    <div class="w-full max-w-xs">
+                        <p class="text-center text-sm font-bold text-yellow-700 mb-2">Califica la atención:</p>
+                        <div class="flex justify-center gap-2 mb-3">
+                            @foreach(range(1,5) as $star)
+                            <button wire:click="$set('rating', {{ $star }})"
+                                class="text-3xl {{ $rating >= $star ? 'text-yellow-400' : 'text-gray-300' }} hover:scale-110 transition">★</button>
+                            @endforeach
+                        </div>
+                        <button wire:click="rateService"
+                            class="w-full bg-yellow-500 text-white font-bold py-2 rounded shadow hover:bg-yellow-600">Enviar</button>
+                    </div>
+                    @endif
+
+                    <a href="{{ route('dashboard') }}"
+                        class="mt-4 text-blue-600 hover:underline text-sm font-bold">Volver al
+                        Inicio</a>
+                </div>
+
+                {{-- 2. CASO FALTA PAGO (Bloqueo Parcial) --}}
+                @elseif(!$ticket->is_paid)
+                @if(auth()->id() === $ticket->user_id)
+                <div class="flex flex-col items-center justify-center py-6 bg-red-50 rounded-xl border border-red-100">
+                    <h3 class="font-bold text-gray-800">🔒 Chat Bloqueado</h3>
+                    <p class="text-gray-500 text-sm mb-4">Paga para activar el servicio.</p>
+                    <button wire:click="payNow"
+                        class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full shadow hover:bg-blue-700 transition">
+                        💳 Pagar ${{ $ticket->amount }} MXN
+                    </button>
+                </div>
+                @else
+                <div
+                    class="flex items-center justify-center p-6 bg-yellow-50 border-2 border-dashed border-yellow-200 rounded-xl text-center">
+                    <span class="text-2xl mr-2">⏳</span> <span class="font-bold text-yellow-800">Esperando Pago</span>
+                </div>
+                @endif
+
+                {{-- 3. CASO CHAT ACTIVO (Normal o Disputa) --}}
+                @else
+                <div class="flex flex-col w-full">
+                    {{-- Preview Imagen --}}
+                    @if ($image)
+                    <div
+                        class="flex items-center gap-2 p-2 bg-gray-100 rounded-t-lg mx-4 border border-b-0 border-gray-300">
+                        <img src="{{ $image->temporaryUrl() }}" class="h-12 w-12 object-cover rounded">
+                        <button wire:click="$set('image', null)" class="text-red-500 font-bold px-2">×</button>
+                        <span class="text-xs text-gray-500">Imagen lista...</span>
+                    </div>
+                    @endif
+
+                    <form wire:submit.prevent="sendMessage" class="flex items-center gap-2">
+                        {{-- Clip --}}
+                        <div>
+                            <input type="file" wire:model="image" id="file-upload" class="hidden" accept="image/*">
+                            <label for="file-upload"
+                                class="cursor-pointer p-2 text-gray-400 hover:text-blue-600 transition">📎</label>
+                        </div>
+
+                        <input type="text" wire:model="newMessage"
+                            class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="Escribe un mensaje...">
+
+                        <button type="submit"
+                            class="bg-blue-600 text-white rounded-full p-2.5 shadow hover:bg-blue-700 transition">
+                            ➤
+                        </button>
+                    </form>
+                </div>
+                @endif
+            </div>
+
+            {{-- 4. BOTÓN DE RECLAMO (Solo si no hay disputa activa y está pagado) --}}
+            @if(!$ticket->is_disputed && $ticket->is_paid && !$isClosed && auth()->id() === $ticket->user_id)
+            <div class="text-center pb-2 bg-gray-50 border-t border-gray-100">
+                @if($showDisputeForm)
+                <div class="p-4 bg-white shadow-inner">
+                    <textarea wire:model="disputeReasonText" class="w-full border-gray-300 rounded text-sm mb-2"
+                        rows="2" placeholder="Describe el problema..."></textarea>
+                    <div class="flex justify-center gap-2">
+                        <button wire:click="$set('showDisputeForm', false)"
+                            class="text-gray-500 text-xs hover:underline">Cancelar</button>
+                        <button wire:click="saveDispute"
+                            class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-red-700">Enviar
+                            Reporte</button>
+                    </div>
+                    @error('disputeReasonText') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span>
+                    @enderror
+                </div>
+                @else
+                <button wire:click="$set('showDisputeForm', true)"
+                    class="text-[10px] text-gray-400 hover:text-red-500 underline py-1">
+                    ¿Problemas? Reportar aquí
+                </button>
+                @endif
+            </div>
+            @endif
+
+        </div>
+        @if(auth()->id() === $ticket->user_id)
+        <div class="mt-4 text-center pb-4">
+
+            @if($ticket->is_disputed)
+            {{-- ESTADO: YA REPORTADO --}}
+            <div
+                class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg inline-block text-left max-w-lg">
+                <strong class="font-bold flex items-center gap-2">
+                    ⚠️ Reclamo Enviado:
+                </strong>
+                <p class="text-sm mt-1 italic">"{{ $ticket->dispute_reason }}"</p>
+                <span class="text-xs text-red-500 block mt-2">Un administrador revisará este caso pronto.</span>
+            </div>
+
+            @elseif($showDisputeForm)
+            {{-- ESTADO: ESCRIBIENDO EL RECLAMO --}}
+            <div class="bg-white border border-gray-300 p-4 rounded-lg shadow-lg max-w-md mx-auto relative z-20">
+                <h4 class="font-bold text-gray-800 mb-2">Describe el problema</h4>
+                <textarea wire:model="disputeReasonText"
+                    class="w-full border-gray-300 rounded text-sm mb-2 focus:ring-red-500 focus:border-red-500" rows="3"
+                    placeholder="Ej: El experto no resolvió nada, me cobraron doble..."></textarea>
+
+                <div class="flex justify-end gap-2">
+                    <button wire:click="$set('showDisputeForm', false)"
+                        class="text-gray-500 text-sm px-3 py-1 hover:underline">Cancelar</button>
+                    <button wire:click="saveDispute"
+                        class="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded hover:bg-red-700">Enviar
+                        Reporte</button>
+                </div>
+                @error('disputeReasonText') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span>
+                @enderror
+            </div>
+            {{-- ZONA DE DISPUTA --}}
+            @elseif($ticket->is_paid)
+            {{-- ESTADO: BOTÓN INICIAL --}}
+            <button wire:click="$set('showDisputeForm', true)"
+                class="text-xs text-gray-400 hover:text-red-500 underline transition cursor-pointer">
+                ¿Problemas con el servicio? Reportar aquí.
+            </button>
+            @endif
+        </div>
+        @endif
+        <script>
+            window.addEventListener('message-sent', event => {
              var chatBox = document.getElementById('chat-box');
              setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 100);
         });
-    </script>
-    {{-- ZONA DE DISPUTA --}}
-    @if(auth()->id() === $ticket->user_id)
-    <div class="mt-4 text-center pb-4">
+        </script>
 
-        @if($ticket->is_disputed)
-        {{-- ESTADO: YA REPORTADO --}}
-        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg inline-block text-left max-w-lg">
-            <strong class="font-bold flex items-center gap-2">
-                ⚠️ Reclamo Enviado:
-            </strong>
-            <p class="text-sm mt-1 italic">"{{ $ticket->dispute_reason }}"</p>
-            <span class="text-xs text-red-500 block mt-2">Un administrador revisará este caso pronto.</span>
-        </div>
-
-        @elseif($showDisputeForm)
-        {{-- ESTADO: ESCRIBIENDO EL RECLAMO --}}
-        <div class="bg-white border border-gray-300 p-4 rounded-lg shadow-lg max-w-md mx-auto relative z-20">
-            <h4 class="font-bold text-gray-800 mb-2">Describe el problema</h4>
-            <textarea wire:model="disputeReasonText"
-                class="w-full border-gray-300 rounded text-sm mb-2 focus:ring-red-500 focus:border-red-500" rows="3"
-                placeholder="Ej: El experto no resolvió nada, me cobraron doble..."></textarea>
-
-            <div class="flex justify-end gap-2">
-                <button wire:click="$set('showDisputeForm', false)"
-                    class="text-gray-500 text-sm px-3 py-1 hover:underline">Cancelar</button>
-                <button wire:click="saveDispute"
-                    class="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded hover:bg-red-700">Enviar
-                    Reporte</button>
-            </div>
-            @error('disputeReasonText') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span> @enderror
-        </div>
-
-        @elseif($ticket->is_paid)
-        {{-- ESTADO: BOTÓN INICIAL --}}
-        <button wire:click="$set('showDisputeForm', true)"
-            class="text-xs text-gray-400 hover:text-red-500 underline transition cursor-pointer">
-            ¿Problemas con el servicio? Reportar aquí.
-        </button>
-        @endif
     </div>
-    @endif
-</div>
