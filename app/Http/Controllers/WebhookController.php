@@ -42,77 +42,80 @@ class WebhookController extends Controller
             // 1. BUSCAR USUARIO
             $user = User::where('phone', $phone)->first();
 
-            // --- CASO 0: USUARIO NUEVO (REGISTRO INICIAL) ---
+            // COMANDO DE RESET (Por si se traba)
+            if (strtolower($text) === 'cancelar' || strtolower($text) === 'reiniciar') {
+                if ($user) $user->update(['conversation_step' => null]);
+                $this->sendWhatsApp($phone, "🔄 Operación cancelada. Escribe 'Hola' para empezar de nuevo.");
+                return response()->json(['status' => 'reset']);
+            }
+
+            // --- CASO 0: USUARIO NUEVO ---
             if (!$user) {
-                // Creamos el usuario con datos temporales
                 $user = User::create([
                     'name' => 'Invitado',
-                    'email' => $phone . '@whatsapp.com', // Temporal
+                    'email' => $phone . '@whatsapp.com',
                     'password' => bcrypt(Str::random(16)),
                     'phone' => $phone,
                     'role' => 'client',
-                    'conversation_step' => 'WAITING_NAME' // PASO 1: Pedir Nombre
+                    'email_verified_at' => now(), // CORRECCIÓN 1: Usuario verificado desde nacer
+                    'conversation_step' => 'WAITING_NAME'
                 ]);
 
-                $this->sendWhatsApp($phone, "👋 ¡Hola! Bienvenido a Mimic IT.\n\nPara poder atenderte, por favor dime: \n\n*¿Cuál es tu nombre?*");
+                $this->sendWhatsApp($phone, "👋 ¡Hola! Bienvenido a Mimic IT.\n\nPara atenderte, dime: \n\n*¿Cuál es tu nombre?*");
                 return response()->json(['status' => 'asked_name']);
             }
 
-            // --- CASO 1: FLUJO DE REGISTRO (MÁQUINA DE ESTADOS) ---
+            // --- CASO 1: MÁQUINA DE ESTADOS ---
 
-            // A) ESPERANDO NOMBRE ➡ PEDIR EMAIL
+            // A) ESPERANDO NOMBRE
             if ($user->conversation_step === 'WAITING_NAME') {
                 $user->update([
                     'name' => $text,
-                    'conversation_step' => 'WAITING_EMAIL' // <--- NUEVO ESTADO
+                    'conversation_step' => 'WAITING_EMAIL'
                 ]);
-
-                $this->sendWhatsApp($phone, "¡Un gusto, {$text}! 🤝\n\nPara crear tu cuenta, necesito tu *Correo Electrónico*:");
+                $this->sendWhatsApp($phone, "¡Un gusto, {$text}! 🤝\n\nAhora escribe tu *Correo Electrónico* para crear tu cuenta:");
                 return response()->json(['status' => 'asked_email']);
             }
 
-            // B) ESPERANDO EMAIL ➡ PEDIR PROBLEMA
+            // B) ESPERANDO EMAIL (CORRECCIÓN 1 Y 2)
             if ($user->conversation_step === 'WAITING_EMAIL') {
 
-                // Validamos que parezca un correo
+                // Validación básica de email
                 if (!filter_var($text, FILTER_VALIDATE_EMAIL)) {
-                    $this->sendWhatsApp($phone, "⚠️ Eso no parece un correo válido. Intenta de nuevo:");
+                    $this->sendWhatsApp($phone, "⚠️ Eso no parece un correo. Intenta de nuevo o escribe 'Cancelar':");
                     return response()->json(['status' => 'invalid_email']);
                 }
 
-                // Intentamos guardar el correo (si no está duplicado)
                 try {
                     $user->update([
                         'email' => $text,
-                        'email_verified_at' => now(), // ✅ Lo verificamos porque nos lo dio por WhatsApp (Canal seguro)
+                        'email_verified_at' => now(), // <--- ¡AQUÍ ESTABA EL ERROR! Ahora sí se verifica.
                         'conversation_step' => 'WAITING_PROBLEM'
                     ]);
                 } catch (\Exception $e) {
-                    $this->sendWhatsApp($phone, "⚠️ Ese correo ya está registrado en nuestro sistema. Por favor escribe otro:");
+                    $this->sendWhatsApp($phone, "⚠️ Ese correo ya existe. Usa otro o escribe 'Cancelar'.");
                     return response()->json(['status' => 'duplicate_email']);
                 }
 
-                $this->sendWhatsApp($phone, "✅ ¡Cuenta configurada!\n\nAhora sí, cuéntame: *¿Qué problema técnico tienes hoy?*");
+                $this->sendWhatsApp($phone, "✅ Cuenta configurada.\n\nCuéntame: *¿Qué problema técnico tienes hoy?*");
                 return response()->json(['status' => 'saved_email']);
             }
 
-            // --- CASO 2: LOGICA DE TICKET ---
+            // --- CASO 2: TICKET ---
 
-            // Verificamos si ya tiene ticket abierto
+            // Verificar si tiene ticket abierto
             $activeTicket = Ticket::where('user_id', $user->id)
                 ->whereIn('status', ['open', 'assigned', 'pending_payment'])
                 ->exists();
 
-            // SI ES USUARIO RECURRENTE (Ya no tiene pasos pendientes)
+            // Si es usuario recurrente (sin tickets, sin pasos pendientes)
             if (!$activeTicket && $user->conversation_step === null) {
-                // Lo saludamos y lo ponemos a esperar el problema
                 $user->update(['conversation_step' => 'WAITING_PROBLEM']);
-
-                $this->sendWhatsApp($phone, "👋 ¡Hola de nuevo, {$user->name}!\n\n¿En qué podemos ayudarte hoy? Describe tu problema:");
+                $this->sendWhatsApp($phone, "👋 ¡Hola de nuevo, {$user->name}!\n\nDescribe tu problema para crear un nuevo ticket:");
                 return response()->json(['status' => 'welcome_back']);
             }
 
-            // SI ESTAMOS ESPERANDO EL PROBLEMA ➡ CREAR TICKET
+            // CREAR TICKET (Si estamos esperando el problema)
             if (!$activeTicket && $user->conversation_step === 'WAITING_PROBLEM') {
 
                 $category = $ai->classifyTicket($text);
@@ -126,10 +129,13 @@ class WebhookController extends Controller
                     'status' => 'pending_payment'
                 ]);
 
-                // Links
+                // CORRECCIÓN 2: STRIPE BLINDADO
+                $paymentLink = "";
                 try {
                     $paymentLink = $stripe->createCheckoutSession($ticket);
                 } catch (\Exception $e) {
+                    Log::error("Stripe Error: " . $e->getMessage());
+                    // Si falla, mandamos link al chat normal
                     $paymentLink = route('ticket.chat', $ticket->uuid);
                 }
 
@@ -140,22 +146,20 @@ class WebhookController extends Controller
                 );
 
                 $mensaje = "🤖 *Ticket Generado* \n" .
-                    "👤 Cliente: *{$user->name}* \n" .
                     "📂 Categoría: *{$category}* \n\n" .
                     "💳 *Paga aquí:* \n{$paymentLink} \n\n" .
-                    "🚀 *Entra a tu Panel:* \n{$magicLink} \n\n" .
-                    "ℹ️ _Tu usuario es tu correo: {$user->email}_";
+                    "🚀 *Panel Web:* \n{$magicLink} \n\n" .
+                    "ℹ️ _Usuario: {$user->email}_";
 
                 $this->sendWhatsApp($phone, $mensaje);
 
-                // Finalizamos el flujo
+                // CORRECCIÓN 3: LIMPIAR ESTADO PARA QUE NO SE TRABE
                 $user->update(['conversation_step' => null]);
 
                 return response()->json(['status' => 'ticket_created']);
             }
 
-            // --- CASO 3: TICKET ACTIVO (CHAT) ---
-            // Si ya tiene ticket, el mensaje va al chat, NO al bot
+            // --- CASO 3: CHAT ACTIVO ---
             $latestTicket = Ticket::where('user_id', $user->id)->latest()->first();
 
             if ($latestTicket) {
@@ -181,11 +185,9 @@ class WebhookController extends Controller
 
     private function sendWhatsApp($to, $text)
     {
-        // Parche México
         if (str_starts_with($to, '521')) {
             $to = '52' . substr($to, 3);
         }
-
         $token = env('META_WHATSAPP_TOKEN');
         $phoneId = env('META_PHONE_ID');
         $url = "https://graph.facebook.com/v18.0/{$phoneId}/messages";
