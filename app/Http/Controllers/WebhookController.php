@@ -44,14 +44,14 @@ class WebhookController extends Controller
 
             // --- CASO 0: USUARIO NUEVO (REGISTRO INICIAL) ---
             if (!$user) {
-                // Creamos el usuario con datos temporales
                 $user = User::create([
                     'name' => 'Invitado',
-                    'email' => $phone . '@whatsapp.com', // Temporal
+                    'email' => $phone . '@whatsapp.com',
                     'password' => bcrypt(Str::random(16)),
                     'phone' => $phone,
                     'role' => 'client',
-                    'conversation_step' => 'WAITING_NAME' // PASO 1: Pedir Nombre
+                    'email_verified_at' => now(), // <--- ¡ESTA LÍNEA ES OBLIGATORIA!
+                    'conversation_step' => 'WAITING_NAME'
                 ]);
 
                 $this->sendWhatsApp($phone, "👋 ¡Hola! Bienvenido a Mimic IT.\n\nPara poder atenderte, por favor dime: \n\n*¿Cuál es tu nombre?*");
