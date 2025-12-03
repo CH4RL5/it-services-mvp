@@ -41,4 +41,20 @@ class Dashboard extends Component
                 ->paginate(10)
         ]);
     }
+    public function resolveDispute($ticketId)
+    {
+        $ticket = Ticket::find($ticketId);
+
+        if ($ticket) {
+            // 1. Quitar la alerta roja
+            $ticket->update(['is_disputed' => false]);
+
+            // 2. Dejar constancia en el Chat (Mensaje del Sistema)
+            \App\Models\Message::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => null, // null significa "Sistema" o "Bot"
+                'body' => '👮‍♂️ El administrador ha revisado el caso y la disputa ha sido resuelta.'
+            ]);
+        }
+    }
 }

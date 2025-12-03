@@ -118,8 +118,21 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+
+                            {{-- SI HAY DISPUTA: Botón de Resolver --}}
+                            @if($ticket->is_disputed)
+                            <button wire:click="resolveDispute({{ $ticket->id }})"
+                                wire:confirm="¿Ya atendiste este reclamo? La alerta roja desaparecerá."
+                                class="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded-md text-xs font-bold mr-2 transition">
+                                ✅ Marcar Resuelto
+                            </button>
+                            @endif
+
+                            {{-- Enlace de siempre --}}
                             <a href="{{ route('ticket.chat', $ticket->uuid) }}"
-                                class="text-indigo-600 hover:text-indigo-900 font-bold">Ver Chat →</a>
+                                class="text-indigo-600 hover:text-indigo-900 font-bold">
+                                Ver Chat →
+                            </a>
                         </td>
                     </tr>
                     @endforeach
