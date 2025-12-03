@@ -133,18 +133,39 @@ class WebhookController extends Controller
                     $paymentLink = route('ticket.chat', $ticket->uuid);
                 }
 
+                // Generar Link Mágico
                 $magicLink = \Illuminate\Support\Facades\URL::temporarySignedRoute(
                     'magic.login',
                     now()->addHour(),
-                    ['user' => $user->id]
+                    ['phone' => $phone] // Asegúrate que coincida con tu ruta web
                 );
 
+                // --- MENSAJE PERSONALIZADO ---
+                // Verificamos si el usuario se creó "hace poco" (ej. en los últimos 10 mins)
+                // O usamos la propiedad wasRecentlyCreated si la guardaste antes
+                $esNuevo = $user->created_at->diffInMinutes(now()) < 10;
+
                 $mensaje = "🤖 *Ticket Generado* \n" .
-                    "👤 Cliente: *{$user->name}* \n" .
                     "📂 Categoría: *{$category}* \n\n" .
-                    "💳 *Paga aquí:* \n{$paymentLink} \n\n" .
-                    "🚀 *Entra a tu Panel:* \n{$magicLink} \n\n" .
-                    "ℹ️ _Tu usuario es tu correo: {$user->email}_";
+                    "💳 *PASO 1: Paga para activar:* \n{$paymentLink} \n\n";
+
+                if ($esNuevo) {
+                    // SI ES NUEVO: Le damos sus credenciales para que las guarde
+                    // (Recuerda que la pass la definiste arriba como 'password')
+                    $userPass = 'password';
+
+                    $mensaje .= "🔐 *PASO 2: Tus Datos de Acceso:* \n" .
+                        "📧 User: {$user->email} \n" .
+                        "🔑 Pass: {$userPass} \n" .
+                        "(Guarda estos datos para entrar desde PC) \n\n";
+                } else {
+                    // SI YA EXISTÍA: Solo le recordamos su usuario
+                    $mensaje .= "🔐 *PASO 2: Tu Cuenta:* \n" .
+                        "📧 User: {$user->email} \n" .
+                        "(Usa tu contraseña habitual) \n\n";
+                }
+
+                $mensaje .= "🚀 *O entra directo sin clave:* \n{$magicLink}";
 
                 $this->sendWhatsApp($phone, $mensaje);
 
