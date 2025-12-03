@@ -225,48 +225,7 @@
             @endif
 
         </div>
-        @if(auth()->id() === $ticket->user_id)
-        <div class="mt-4 text-center pb-4">
 
-            @if($ticket->is_disputed)
-            {{-- ESTADO: YA REPORTADO --}}
-            <div
-                class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg inline-block text-left max-w-lg">
-                <strong class="font-bold flex items-center gap-2">
-                    ⚠️ Reclamo Enviado:
-                </strong>
-                <p class="text-sm mt-1 italic">"{{ $ticket->dispute_reason }}"</p>
-                <span class="text-xs text-red-500 block mt-2">Un administrador revisará este caso pronto.</span>
-            </div>
-
-            @elseif($showDisputeForm)
-            {{-- ESTADO: ESCRIBIENDO EL RECLAMO --}}
-            <div class="bg-white border border-gray-300 p-4 rounded-lg shadow-lg max-w-md mx-auto relative z-20">
-                <h4 class="font-bold text-gray-800 mb-2">Describe el problema</h4>
-                <textarea wire:model="disputeReasonText"
-                    class="w-full border-gray-300 rounded text-sm mb-2 focus:ring-red-500 focus:border-red-500" rows="3"
-                    placeholder="Ej: El experto no resolvió nada, me cobraron doble..."></textarea>
-
-                <div class="flex justify-end gap-2">
-                    <button wire:click="$set('showDisputeForm', false)"
-                        class="text-gray-500 text-sm px-3 py-1 hover:underline">Cancelar</button>
-                    <button wire:click="saveDispute"
-                        class="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded hover:bg-red-700">Enviar
-                        Reporte</button>
-                </div>
-                @error('disputeReasonText') <span class="text-red-500 text-xs block mt-1">{{ $message }}</span>
-                @enderror
-            </div>
-            {{-- ZONA DE DISPUTA --}}
-            @elseif($ticket->is_paid)
-            {{-- ESTADO: BOTÓN INICIAL --}}
-            <button wire:click="$set('showDisputeForm', true)"
-                class="text-xs text-gray-400 hover:text-red-500 underline transition cursor-pointer">
-                ¿Problemas con el servicio? Reportar aquí.
-            </button>
-            @endif
-        </div>
-        @endif
         <script>
             window.addEventListener('message-sent', event => {
              var chatBox = document.getElementById('chat-box');
