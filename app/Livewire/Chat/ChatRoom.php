@@ -24,7 +24,8 @@ class ChatRoom extends Component
     // Variables para calificación
     public $rating = 5;
     public $review = '';
-
+    public $disputeReasonText = ''; // El texto que escribe el usuario
+    public $showDisputeForm = false; // Para mostrar/ocultar el input
     public function mount(Ticket $ticket)
     {
         // 1. Seguridad: Solo Dueño, Experto o Admin
@@ -189,16 +190,30 @@ class ChatRoom extends Component
 
         $this->dispatch('message-sent');
     }
-    public function reportIssue()
+    public function saveDispute()
     {
-        // Doble chequeo de seguridad
-        if (Auth::id() !== $this->ticket->user_id) return;
-
-        $this->ticket->update([
-            'is_disputed' => true
+        // Validación
+        $this->validate([
+            'disputeReasonText' => 'required|min:10|max:255'
         ]);
 
-        $this->dispatch('message-sent'); // Refrescar UI
+        if (Auth::id() !== $this->ticket->user_id) return;
+
+        // 1. Actualizar el Ticket con la bandera y el motivo
+        $this->ticket->update([
+            'is_disputed' => true,
+            'dispute_reason' => $this->disputeReasonText
+        ]);
+
+        // 2. Agregar un mensaje automático en el chat (Para que quede en el historial)
+        Message::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => null, // Sistema
+            'body' => "🚨 RECLAMO DEL CLIENTE: \n" . $this->disputeReasonText
+        ]);
+
+        $this->showDisputeForm = false;
+        $this->dispatch('message-sent');
     }
     public function render()
     {

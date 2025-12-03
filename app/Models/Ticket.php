@@ -20,9 +20,10 @@ class Ticket extends Model
         'is_paid',
         'rating',
         'review',
-        'is_disputed', 
+        'is_disputed',
         'assigned_at',
-        'closed_at'
+        'closed_at',
+        'dispute_reason'
     ];
     public function getRouteKeyName()
     {
