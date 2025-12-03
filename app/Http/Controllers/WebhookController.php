@@ -157,7 +157,7 @@ class WebhookController extends Controller
                     $mensaje .= "🔐 *PASO 2: Tus Datos de Acceso:* \n" .
                         "📧 User: {$user->email} \n" .
                         "🔑 Pass: {$userPass} \n" .
-                        "(Guarda estos datos para entrar desde PC) \n\n";
+                        "(Guarda estos datos para entrar desde PC. Se recomienda actualizar tu contraseña en tu perfil) \n\n";
                 } else {
                     // SI YA EXISTÍA: Solo le recordamos su usuario
                     $mensaje .= "🔐 *PASO 2: Tu Cuenta:* \n" .
