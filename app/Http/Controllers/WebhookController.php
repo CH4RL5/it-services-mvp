@@ -47,7 +47,7 @@ class WebhookController extends Controller
                 $user = User::create([
                     'name' => 'Invitado',
                     'email' => $phone . '@whatsapp.com',
-                    'password' => bcrypt(Str::random(16)),
+                    'password' => bcrypt('password'),
                     'phone' => $phone,
                     'role' => 'client',
                     'email_verified_at' => now(), // <--- ¡ESTA LÍNEA ES OBLIGATORIA!
