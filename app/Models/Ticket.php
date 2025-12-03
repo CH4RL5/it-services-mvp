@@ -7,7 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 class Ticket extends Model
 {
     protected $guarded = [];
-
+    protected $fillable = [
+        'uuid',
+        'user_id',
+        'expert_id',
+        'title',
+        'description',
+        'category',
+        'status',
+        'stripe_session_id',
+        'amount',
+        'is_paid',
+        'rating',
+        'review',
+        'is_disputed', 
+        'assigned_at',
+        'closed_at'
+    ];
     public function getRouteKeyName()
     {
         return 'uuid'; // Para usar URLs seguras

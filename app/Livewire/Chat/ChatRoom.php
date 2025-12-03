@@ -191,19 +191,15 @@ class ChatRoom extends Component
     }
     public function reportIssue()
     {
-        // Solo el dueño puede reportar
+        // Doble chequeo de seguridad
         if (Auth::id() !== $this->ticket->user_id) return;
 
         $this->ticket->update([
             'is_disputed' => true
         ]);
 
-        // (Opcional) Aquí podrías enviar un correo al Admin avisando
-        // Mail::to('admin@mimic.com')->send(new AdminAlert($this->ticket));
-
-        session()->flash('error', 'Reporte enviado. Un administrador revisará tu caso personalmente.');
+        $this->dispatch('message-sent'); // Refrescar UI
     }
-
     public function render()
     {
         return view('livewire.chat.chat-room', [

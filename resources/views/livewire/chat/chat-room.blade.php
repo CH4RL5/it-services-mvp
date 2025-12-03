@@ -194,20 +194,21 @@
              setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 100);
         });
     </script>
-    {{-- ZONA DE DISPUTA --}}
+    {{-- ZONA DE DISPUTA (Solo visible para el Cliente) --}}
+    @if(auth()->id() === $ticket->user_id)
     <div class="mt-4 text-center">
         @if($ticket->is_disputed)
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative inline-block">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative inline-block text-sm">
             <strong class="font-bold">⚠️ En Revisión:</strong>
-            <span class="block sm:inline">Has reportado este ticket. Un administrador te contactará pronto.</span>
+            <span class="block sm:inline">Has reportado este caso. Un administrador lo revisará.</span>
         </div>
         @elseif($ticket->is_paid)
-        {{-- Solo mostrar si ya pagó (nadie reclama algo gratis) --}}
         <button wire:click="reportIssue"
-            wire:confirm="¿Deseas reportar un problema con este servicio? El administrador revisará el caso."
-            class="text-xs text-gray-400 hover:text-red-500 underline transition">
-            ¿Tuviste un problema con el pago o el experto? Reportar aquí.
+            wire:confirm="¿Estás seguro? Esto alertará al administrador para revisar el caso."
+            class="text-xs text-gray-400 hover:text-red-500 underline transition cursor-pointer">
+            ¿Problemas con el servicio? Reportar aquí.
         </button>
         @endif
     </div>
+    @endif
 </div>
