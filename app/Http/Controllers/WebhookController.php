@@ -165,7 +165,7 @@ class WebhookController extends Controller
                         "(Usa tu contraseña habitual) \n\n";
                 }
 
-                $mensaje .= "🚀 *O entra directo sin clave:* \n{$magicLink}";
+               // $mensaje .= "🚀 *O entra directo sin clave:* \n{$magicLink}";
 
                 $this->sendWhatsApp($phone, $mensaje);
 
