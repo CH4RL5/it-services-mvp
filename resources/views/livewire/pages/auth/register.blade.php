@@ -64,7 +64,7 @@ new #[Layout('layouts.guest')] class extends Component
         <div class="mt-4">
             <x-input-label for="phone" :value="__('Teléfono (WhatsApp)')" />
             <x-text-input wire:model="phone" id="phone" class="block mt-1 w-full" type="text" name="phone" required
-                placeholder="Ej: 521..." />
+                placeholder="Ej: 521 + 123456789 = 521123456789" />
             <x-input-error :messages="$errors->get('phone')" class="mt-2" />
         </div>
 
